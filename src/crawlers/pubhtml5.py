@@ -105,10 +105,11 @@ def __compress_pdf(old_path: str, new_path: str, level: int = 50) -> None:
     return True
 
 
-def export_pdf(url: str, parent_folder: str):
+def export_pdf(url: str, parent_folder: str) -> None:
     tmp_id = gen_id(PREFIX)
     tmp_folder = (Path(parent_folder) / Path(PREFIX) / Path(tmp_id)).as_posix()
 
+    # download images
     logger = CustomLog(logger_name=tmp_id)
     logger.info(url)
     with WebScraper(url, is_headless=False, user_data_dir=PREFIX) as ws:
@@ -118,29 +119,38 @@ def export_pdf(url: str, parent_folder: str):
         logger.info(f"Title: {title}")
         logger.info(f"Total pages: {pages}")
         make_folder(tmp_folder)
-        # total_pages = 5
+        # pages = 5
         is_done = __process_scrape_image(
             ws=ws, total_pages=pages, target_folder=tmp_folder, logger=logger
         )
         logger.info(f"download status: {'success' if is_done else 'failed'}")
-        tmp_pdf_path = (Path(tmp_folder) / Path(f"{title}.pdf")).as_posix()
-        real_pdf_path = (
-            Path(parent_folder) / Path(PREFIX) / Path(f"{title}.pdf")
-        ).as_posix()
-        logger.info(f"creating pdf: {tmp_pdf_path}")
-        __build_pdf(source_folder=tmp_folder, target_pdf_path=tmp_pdf_path)
-        if (
-            get_filesize(tmp_pdf_path) / (1024 * 1024)
-            > MAX_FILESIZE_BEFORE_COMPRESSION_MB
-        ):
-            logger.info("file is too big. doing compression...")
-            __compress_pdf(
-                old_path=tmp_pdf_path, new_path=real_pdf_path, level=COMPRESSION_LEVEL
-            )
-        else:
-            logger.info("file is small enough. moving to parent folder.")
-            move_file(src=tmp_pdf_path, dst=real_pdf_path)
-        logger.info(f"final pdf is at {real_pdf_path}")
-        logger.info(f"removing temp folder: {tmp_folder}")
-        remove_folder(tmp_folder)
-        logger.info("completed")
+
+    # create pdf
+    tmp_pdf_path = (Path(tmp_folder) / Path(f"{title}.pdf")).as_posix()
+    real_pdf_path = (
+        Path(parent_folder) / Path(PREFIX) / Path(f"{title}.pdf")
+    ).as_posix()
+    logger.info(f"creating pdf: {tmp_pdf_path}")
+    __build_pdf(source_folder=tmp_folder, target_pdf_path=tmp_pdf_path)
+
+    # compress pdf
+    if (
+        pdf_size := get_filesize(tmp_pdf_path) / (1024 * 1024)
+    ) > MAX_FILESIZE_BEFORE_COMPRESSION_MB:
+        logger.info(
+            f"file size ({pdf_size:.2f} Mb) is bigger than {MAX_FILESIZE_BEFORE_COMPRESSION_MB} Mb. performing compression..."
+        )
+        __compress_pdf(
+            old_path=tmp_pdf_path, new_path=real_pdf_path, level=COMPRESSION_LEVEL
+        )
+    else:
+        logger.info("file is small enough. moving to parent folder.")
+        move_file(src=tmp_pdf_path, dst=real_pdf_path)
+
+    # cleanup and report
+    logger.info(
+        f"final pdf is at {real_pdf_path} ({get_filesize(real_pdf_path) / (1024 * 1024):.2f} Mb)"
+    )
+    logger.info(f"removing temp folder: {tmp_folder}")
+    remove_folder(tmp_folder)
+    logger.info("completed")

@@ -73,7 +73,7 @@ def split_extension(filename: str) -> tuple[str, str]:
     return os.path.splitext(filename)
 
 
-def get_filesize(_f: str) -> int:
+def get_filesize(_f: str) -> float:
     """
     Get size of the filepath
 
