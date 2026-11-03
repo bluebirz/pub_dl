@@ -56,18 +56,25 @@ def __process_scrape_image(
     iframe_url = f"https://online.{''.join([t for t in url_trunk if t])}/"
     frame = ws.page.frame(url=iframe_url)
     is_done = True
+    message_queue = []
     with ProgressBar(max_num=total_pages) as pb:
         for i in range(1, total_pages + 1):
             url = __get_img_url(frame, i)
             # print(f"{i=}: {url=}")
             path = f"{i}.{url.split(".")[-1]}"
-            status, msg = ws.download(
+            dl_passed, msg = ws.download(
                 img_url=url,
                 img_download_path=(Path(target_folder) / Path(path)).as_posix(),
             )
-            is_done = is_done and status
+            if not dl_passed:
+                message_queue.append(msg)
+            is_done = is_done and dl_passed
             pb.update_bar()
             pb.update_desc(msg)
+    if len(message_queue) > 0:
+        logger.error(f"Found failed downloads by {len(message_queue)} items")
+        for m in message_queue:
+            logger.error(m)
     return is_done
 
 
@@ -124,6 +131,12 @@ def export_pdf(url: str, parent_folder: str) -> None:
             ws=ws, total_pages=pages, target_folder=tmp_folder, logger=logger
         )
         logger.info(f"download status: {'success' if is_done else 'failed'}")
+
+    # download failed --> cleanup and abort
+    if not is_done:
+        logger.error("download failed. aborting...")
+        remove_folder(tmp_folder)
+        return
 
     # create pdf
     tmp_pdf_path = (Path(tmp_folder) / Path(f"{title}.pdf")).as_posix()
